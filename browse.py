@@ -16,6 +16,8 @@ SYSTEM_PROMPT = """You are an AI-enabled program with excellent understanding of
 
 I am providing you with a link to a PDF I'm currently on.
 Using the tools available, open a browswer and navigate using the steps only within the "Checking Logged In Devices" section.
+This will be the second iteration of "Checking Logged In Devices" since it is also found in the Table of Contents at the top of the PDF.
+Find the "Checking Logged In Devices" header and follow the steps under it to get to the "Manage all devices" page.
 (You will need to click on things to leave the first page!)
 
 YOUR GOAL is to follow these steps and get to the "Manage all devices" page.
