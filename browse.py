@@ -10,17 +10,17 @@ logger = getLogger(__name__)
 
 # %%
 
-START_URL = "https://www.example.com/"
+START_URL = "https://ceta.tech.cornell.edu/_files/ugd/9e6719_0a07e4950cd04ffe81dbba37e6399701.pdf"
 
 SYSTEM_PROMPT = """You are an AI-enabled program with excellent understanding of HTML/CSS and no personality.
 
-I am providing you with the HTML of the page I'm currently on.
-Using the tools available, navigate the website.
+I am providing you with a link to a PDF I'm currently on.
+Using the tools available, open a browswer and navigate using the steps only within the "Checking Logged In Devices" section.
 (You will need to click on things to leave the first page!)
 
-YOUR GOAL is to find and return to me the authors of the RFC ending in 61 that you find.
+YOUR GOAL is to follow these steps and get to the "Manage all devices" page.
 
-At the end, output only your answer.
+At the end, output True if you successfully navigated to this page, False if not.
 
 This is not an interactive session, so do not try to ask me questions or expect responses.
 Don't forget that you can navigate the website using the tools I provide.
