@@ -138,24 +138,29 @@ response = await conversation.prompt(
 while current_step < len(STEP_PROMPTS):
     logger.info(f"🚀 Starting Step {current_step + 1}")
 
-    # Process tool calls
     tool_calls = await response.tool_calls()
     if tool_calls:
         logger.debug(f"Tool calls found in Step {current_step + 1}")
-        response = await response.execute_tool_calls()
+        result = await response.execute_tool_calls()
         await tools._take_screenshot(f"step{current_step+1}")
-        text_output = await response.text()
 
-        # Check if the model indicates step completion
-        if f"STEP {current_step + 1} COMPLETE" in text_output:
-            logger.info(f"✅ Step {current_step + 1} marked complete by model")
+        # Normalize: handle list or single response
+        if isinstance(result, list):
+            response = result[-1]
         else:
-            continue  # stay in same step until completion text appears
-    else:
-        # No tool calls — maybe done
-        text_output = await response.text()
+            response = result
 
-    # Step completion check
+    # Safely get text output
+    try:
+        text_output = await response.text()
+    except AttributeError:
+        if isinstance(response, list) and len(response) > 0:
+            response = response[-1]
+            text_output = await response.text()
+        else:
+            text_output = ""
+
+    # Check if this step is marked complete
     if f"STEP {current_step + 1} COMPLETE" in text_output or not tool_calls:
         logger.info(f"✅ Step {current_step + 1} output:\n{text_output}")
         print(f"\n=== Step {current_step + 1} Output ===\n{text_output}\n")
