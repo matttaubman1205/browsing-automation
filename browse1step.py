@@ -22,17 +22,22 @@ STEP_PROMPTS = [
     """Step 1:
 You are currently on the Oberlin College main site.
 Find and navigate to the Computer Science department page.
-Once there, stop and return the page HTML.""",
+Once there, stop and return the page HTML.
+When you have successfully reached the Computer Science department page, output the message:
+"STEP 1 COMPLETE".""",
 
     """Step 2:
 You are now on the Computer Science department page.
 Find the section that lists faculty members.
-Once the faculty page is reached, stop and return the page HTML.""",
+Once the faculty page is reached, stop and return the page HTML.
+When you have successfully reached the faculty list page, output the message:
+"STEP 2 COMPLETE".""",
 
     """Step 3:
 You are now on the faculty list page for the Computer Science department.
 Extract the names of all emeriti (Emeritus/Emerita) faculty.
-Output only the names, one per line.""",
+Output only the names, one per line, and then write:
+"STEP 3 COMPLETE".""",
 ]
 
 # %%
@@ -60,10 +65,7 @@ class PlaywrightTools(llm.Toolbox):
             log.write(f"{timestamp} | STEP={label} | URL={current_url}\n")
 
     async def click(self, selector: str, description: str = "") -> str:
-        """
-        Given a CSS or XPATH selector, click on that element.
-        For clarity, prefix with `css=` or `xpath=`.
-        """
+        """Click on an element by selector."""
         logger.debug(f"Clicking on {description} ({selector})")
         await self.page.locator(selector).click()
         self.history.append(("click", selector))
@@ -136,13 +138,25 @@ response = await conversation.prompt(
 while current_step < len(STEP_PROMPTS):
     logger.info(f"🚀 Starting Step {current_step + 1}")
 
+    # Process tool calls
     tool_calls = await response.tool_calls()
     if tool_calls:
-        tool_results = await response.execute_tool_calls()
+        logger.debug(f"Tool calls found in Step {current_step + 1}")
+        response = await response.execute_tool_calls()
         await tools._take_screenshot(f"step{current_step+1}")
-    else:
-        # No tool calls – maybe the step is done
         text_output = await response.text()
+
+        # Check if the model indicates step completion
+        if f"STEP {current_step + 1} COMPLETE" in text_output:
+            logger.info(f"✅ Step {current_step + 1} marked complete by model")
+        else:
+            continue  # stay in same step until completion text appears
+    else:
+        # No tool calls — maybe done
+        text_output = await response.text()
+
+    # Step completion check
+    if f"STEP {current_step + 1} COMPLETE" in text_output or not tool_calls:
         logger.info(f"✅ Step {current_step + 1} output:\n{text_output}")
         print(f"\n=== Step {current_step + 1} Output ===\n{text_output}\n")
 
