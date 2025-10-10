@@ -4,7 +4,6 @@
 
 import os
 import time
-import llm
 from playwright.async_api import async_playwright, Page
 from sclog import getLogger
 
@@ -31,7 +30,7 @@ Output only the names, one per line.""",
 ]
 
 
-class PlaywrightTools(llm.Toolbox):
+class PlaywrightTools:
     def __init__(self, page: Page):
         super().__init__()
         self.page = page
