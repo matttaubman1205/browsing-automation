@@ -4,6 +4,7 @@
 
 import os
 import time
+import asyncio
 import llm
 from playwright.async_api import async_playwright, Page
 from sclog import getLogger
@@ -15,7 +16,7 @@ logger = getLogger(__name__)
 os.makedirs("screenshots", exist_ok=True)
 
 # %%
-START_URL = "https://www.oberlin.edu/"  # 👈 start at Oberlin's main site
+START_URL = "https://www.oberlin.edu/"
 
 STEP_PROMPTS = [
     """Step 1:
@@ -94,8 +95,26 @@ def should_continue(skip_count: int) -> tuple[bool, int]:
     return True, 0
 
 
+# %%
+# Async helper to safely extract text from ToolResult
+async def get_tool_result_text(tr):
+    """Extract text from a ToolResult object safely in async context."""
+    if hasattr(tr, "output"):
+        val = tr.output
+        if hasattr(val, "__await__"):
+            return await val
+        else:
+            return str(val)
+    elif hasattr(tr, "text"):
+        return await tr.text()
+    elif hasattr(tr, "response"):
+        return tr.response
+    else:
+        return str(tr)
+
+
 ###############################################################################
-# Top-level async code (works with async_run.py)
+# Top-level async code
 # %%
 
 playwright = await async_playwright().start()
@@ -107,7 +126,7 @@ page.set_default_timeout(8000)
 await page.goto(START_URL)
 await page.screenshot(path="screenshots/000-start.png", full_page=True)
 
-MODEL = "gemini-2.5-flash"  # or "gpt-4.1-turbo"
+MODEL = "gemini-2.5-flash"
 model = llm.get_async_model(MODEL)
 
 tools = PlaywrightTools(page)
@@ -131,15 +150,14 @@ while current_step < len(STEP_PROMPTS):
         tool_results = await response.execute_tool_calls()
         await tools._take_screenshot(f"step{current_step+1}")
 
-        # Handle both list and single ToolResult
         if isinstance(tool_results, list):
-            # Access .response instead of .text()
-            text_output = "\n".join([tr.response for tr in tool_results])
+            text_output = "\n".join([await get_tool_result_text(tr) for tr in tool_results])
         else:
-            text_output = tool_results.response
+            text_output = await get_tool_result_text(tool_results)
     else:
         text_output = await response.text()
 
+    # Check if step is complete via "STEP X COMPLETE"
     if f"STEP {current_step + 1} COMPLETE" in text_output:
         logger.info(f"✅ Step {current_step + 1} output:\n{text_output}")
         print(f"\n=== Step {current_step + 1} Output ===\n{text_output}\n")
