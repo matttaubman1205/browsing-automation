@@ -133,9 +133,10 @@ while current_step < len(STEP_PROMPTS):
 
         # Handle both list and single ToolResult
         if isinstance(tool_results, list):
-            text_output = "\n".join([await tr.text() for tr in tool_results])
+            # Access .response instead of .text()
+            text_output = "\n".join([tr.response for tr in tool_results])
         else:
-            text_output = await tool_results.text()
+            text_output = tool_results.response
     else:
         text_output = await response.text()
 
