@@ -17,7 +17,6 @@ os.makedirs("screenshots", exist_ok=True)
 # %%
 START_URL = "https://www.oberlin.edu/"  # 👈 start at Oberlin's main site
 
-# Multi-stage prompts for "one step at a time"
 STEP_PROMPTS = [
     """Step 1:
 You are currently on the Oberlin College main site.
@@ -41,7 +40,6 @@ Output only the names, one per line, and then write:
 ]
 
 # %%
-# Define tools for the LLM to use
 class PlaywrightTools(llm.Toolbox):
     def __init__(self, page: Page):
         super().__init__()
@@ -50,11 +48,9 @@ class PlaywrightTools(llm.Toolbox):
         self.screenshot_index = 0
 
     async def _get_html(self) -> str:
-        """Return the HTML of the current page."""
         return await self.page.locator("body").inner_html()
 
     async def _take_screenshot(self, label: str):
-        """Save a screenshot with timestamp and step index."""
         self.screenshot_index += 1
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         filename = f"screenshots/{self.screenshot_index:03d}-{label}-{timestamp}.png"
@@ -65,7 +61,6 @@ class PlaywrightTools(llm.Toolbox):
             log.write(f"{timestamp} | STEP={label} | URL={current_url}\n")
 
     async def click(self, selector: str, description: str = "") -> str:
-        """Click on an element by selector."""
         logger.debug(f"Clicking on {description} ({selector})")
         await self.page.locator(selector).click()
         self.history.append(("click", selector))
@@ -73,7 +68,6 @@ class PlaywrightTools(llm.Toolbox):
         return await self._get_html()
 
     async def go_back(self) -> str:
-        """Go back one page."""
         logger.debug("Going back")
         await self.page.go_back()
         self.history.append(("back", ""))
@@ -81,14 +75,12 @@ class PlaywrightTools(llm.Toolbox):
         return await self._get_html()
 
     async def get_html(self) -> str:
-        """Get current page HTML and take screenshot."""
         await self._take_screenshot("html")
         return await self._get_html()
 
 
 # %%
 def should_continue(skip_count: int) -> tuple[bool, int]:
-    """Prompt whether to continue executing LLM tool calls."""
     if skip_count > 0:
         return True, skip_count - 1
     try:
@@ -103,84 +95,71 @@ def should_continue(skip_count: int) -> tuple[bool, int]:
 
 
 ###############################################################################
-# Main logic
+# Top-level async code (works with async_run.py)
 # %%
-async def main():
-    playwright = await async_playwright().start()
-    browser = await playwright.chromium.launch(channel="chrome", headless=False)
-    context = await browser.new_context(viewport={"width": 1440, "height": 1700})
-    page = await context.new_page()
-    page.set_default_timeout(8000)
 
-    await page.goto(START_URL)
+playwright = await async_playwright().start()
+browser = await playwright.chromium.launch(channel="chrome", headless=False)
+context = await browser.new_context(viewport={"width": 1440, "height": 1700})
+page = await context.new_page()
+page.set_default_timeout(8000)
 
-    # initial screenshot
-    await page.screenshot(path="screenshots/000-start.png", full_page=True)
+await page.goto(START_URL)
+await page.screenshot(path="screenshots/000-start.png", full_page=True)
 
-    # %%
-    # Set up LLM
-    MODEL = "gemini-2.5-flash"  # or "gpt-4.1-turbo" if available
-    model = llm.get_async_model(MODEL)
+MODEL = "gemini-2.5-flash"  # or "gpt-4.1-turbo"
+model = llm.get_async_model(MODEL)
 
-    tools = PlaywrightTools(page)
-    conversation = model.conversation(tools=[tools])
+tools = PlaywrightTools(page)
+conversation = model.conversation(tools=[tools])
 
-    logger.debug("Starting one-step-at-a-time guide")
+logger.debug("Starting one-step-at-a-time guide")
 
-    # Start with step 1
-    current_step = 0
-    response = await conversation.prompt(
-        prompt=await tools._get_html(),
-        system=STEP_PROMPTS[current_step],
-        tools=[tools],
-    )
+current_step = 0
+response = await conversation.prompt(
+    prompt=await tools._get_html(),
+    system=STEP_PROMPTS[current_step],
+    tools=[tools],
+)
 
-    # Run through steps sequentially
-    while current_step < len(STEP_PROMPTS):
-        logger.info(f"🚀 Starting Step {current_step + 1}")
+while current_step < len(STEP_PROMPTS):
+    logger.info(f"🚀 Starting Step {current_step + 1}")
 
-        # Get any tool calls from the conversation response
-        tool_calls = await response.tool_calls()
-        if tool_calls:
-            logger.debug(f"Tool calls found in Step {current_step + 1}")
-            tool_result = await response.execute_tool_calls()
-            await tools._take_screenshot(f"step{current_step+1}")
+    tool_calls = await response.tool_calls()
+    if tool_calls:
+        logger.debug(f"Tool calls found in Step {current_step + 1}")
+        tool_result = await response.execute_tool_calls()
+        await tools._take_screenshot(f"step{current_step+1}")
+        text_output = await tool_result.text()
+    else:
+        text_output = await response.text()
 
-            # Get text output from the tool result
-            text_output = await tool_result.text()
-        else:
-            text_output = await response.text()
+    if f"STEP {current_step + 1} COMPLETE" in text_output:
+        logger.info(f"✅ Step {current_step + 1} output:\n{text_output}")
+        print(f"\n=== Step {current_step + 1} Output ===\n{text_output}\n")
 
-        # Check if this step is complete
-        if f"STEP {current_step + 1} COMPLETE" in text_output:
-            logger.info(f"✅ Step {current_step + 1} output:\n{text_output}")
-            print(f"\n=== Step {current_step + 1} Output ===\n{text_output}\n")
+        timestamp = time.strftime("%Y%m%d-%H%M%S")
+        with open("run_log.txt", "a") as log:
+            log.write(f"{timestamp} | STEP {current_step+1} COMPLETE | URL={page.url}\n")
 
-            # Log step summary
-            timestamp = time.strftime("%Y%m%d-%H%M%S")
-            with open("run_log.txt", "a") as log:
-                log.write(f"{timestamp} | STEP {current_step+1} COMPLETE | URL={page.url}\n")
+        current_step += 1
+        if current_step < len(STEP_PROMPTS):
+            response = await conversation.prompt(
+                system=STEP_PROMPTS[current_step],
+                tools=[tools],
+                prompt=await tools._get_html(),
+            )
 
-            # Move to next step
-            current_step += 1
-            if current_step < len(STEP_PROMPTS):
-                response = await conversation.prompt(
-                    system=STEP_PROMPTS[current_step],
-                    tools=[tools],
-                    prompt=await tools._get_html(),
-                )
+final_text = await response.text()
+print(f"Final response:\n{final_text}\n")
 
-    # Final output
-    final_text = await response.text()
-    print(f"Final response:\n{final_text}\n")
+print("\nSteps taken:")
+for action, value in tools.history:
+    print(f"- {action}: {value}")
 
-    print("\nSteps taken:")
-    for action, value in tools.history:
-        print(f"- {action}: {value}")
+await tools._take_screenshot("final")
 
-    await tools._take_screenshot("final")
-
-    await page.close()
-    await context.close()
-    await browser.close()
-    await playwright.stop()
+await page.close()
+await context.close()
+await browser.close()
+await playwright.stop()
