@@ -128,9 +128,14 @@ while current_step < len(STEP_PROMPTS):
     tool_calls = await response.tool_calls()
     if tool_calls:
         logger.debug(f"Tool calls found in Step {current_step + 1}")
-        tool_result = await response.execute_tool_calls()
+        tool_results = await response.execute_tool_calls()
         await tools._take_screenshot(f"step{current_step+1}")
-        text_output = await tool_result.text()
+
+        # Handle both list and single ToolResult
+        if isinstance(tool_results, list):
+            text_output = "\n".join([await tr.text() for tr in tool_results])
+        else:
+            text_output = await tool_results.text()
     else:
         text_output = await response.text()
 
