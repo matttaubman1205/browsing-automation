@@ -46,47 +46,44 @@ class PlaywrightTools(llm.Toolbox):
         self.history: list[tuple[str, str]] = []
 
     async def _get_html(self) -> str:
-        """
-        Return the HTML of the current page.
-        This method is not passed to the LLM because its name starts with _.
-        """
-        return await page.locator("body").inner_html()
+        """Return the HTML of the current page."""
+        return await self.page.locator("body").inner_html()
 
     async def click(self, selector: str, description: str = "") -> str:
         """
-        Given a CSS or XPATH selector, click on that element.
-
-        **If multiple elements match the selector, this will error, so it's crucial to be unambiguous!**
-        For extra clarity, prefix `css=` or `xpath=`.
-        Examples: `css=button`, `xpath=//button`
-
-        :param selector: The CSS or XPATH selector to click on.
-        :param description: A plain-language description of the selector for logging.
-        :return: The new HTML content of the page after the click.
+        Given a CSS or XPATH selector, click on that element and return the new page HTML.
         """
         logger.debug(f"Clicking on {description} ({selector})")
         try:
-            await page.locator(selector).click()
+            # Click the element
+            await self.page.locator(selector).click()
 
+            # Wait for network to settle or DOM to stabilize
+            await self.page.wait_for_load_state("networkidle")
+
+            # Optionally wait for body to exist again
+            await self.page.wait_for_selector("body", state="attached")
+
+            # Record the click in history
             self.history.append(("click", selector))
 
-            await page.screenshot(
+            # Take a screenshot for debugging
+            await self.page.screenshot(
                 path=f"screenshots/screenshot-{len(self.history)}.png"
             )
+
         except TimeoutError as e:
-            logger.warning(f"Clicking on {selector} failed. Will tell LLM about it..")
+            logger.warning(f"Clicking on {selector} failed: {e}")
             raise e
 
+        # Return the updated HTML
         return await self._get_html()
 
     async def go_back(self) -> str:
-        """
-        Go back to the previous page in the browser history.
-
-        :return: The new HTML content of the page after going back.
-        """
+        """Go back to the previous page and return its HTML."""
         logger.debug("Going back in browser history")
         await self.page.go_back()
+        await self.page.wait_for_load_state("networkidle")
         self.history.append(("back", ""))
         return await self._get_html()
 
