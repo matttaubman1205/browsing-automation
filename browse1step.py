@@ -7,6 +7,7 @@ from playwright.async_api import async_playwright, Page
 from sclog import getLogger
 
 logger = getLogger(__name__)
+logger.setLevel("INFO")
 
 # %%
 
