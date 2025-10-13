@@ -31,8 +31,7 @@ You have access to these tools:
 6. Do not ask questions or expect user input — act autonomously using the tools.
 
 Return only:
-- Tool calls (if actions needed), or
-- "Success"/"Failure" (as plain text).
+    The **current page URL** (as plain text) once you believe you have reached the correct page.
 """
 
 
