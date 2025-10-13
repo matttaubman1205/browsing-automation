@@ -12,18 +12,26 @@ logger = getLogger(__name__)
 
 START_URL = "https://www.oberlin.edu/"
 
-SYSTEM_PROMPT = """You are an AI-enabled program with excellent understanding of HTML/CSS and no personality.
+SYSTEM_PROMPT = """
+You are an autonomous web navigation agent with strong knowledge of HTML and CSS.
 
-I am providing you with a link to a website.
-Using the tools available, open a browswer on the start URL.
-(You will need to click on things to leave the first page!)
+Your goal: Starting from the Oberlin College homepage, navigate to the **College of Arts and Sciences** page.
 
-YOUR FIRST STEP: Click on College of Arts and Sciences and get to the college of arts and sciences page.
+You have access to these tools:
+- `click(selector, description)` → Click an element on the page using a CSS or XPath selector.
+- `go_back()` → Go to the previous page.
 
-At the end, return "Success" if you made it to the desired page, "Failure" if not.
+**Instructions:**
+1. Inspect the HTML of the current page (it is provided to you as input).
+2. Identify the link or button that leads to the College of Arts and Sciences page.
+3. Use `click()` with an unambiguous selector (e.g., `css=a[href*="arts-and-sciences"]`) to navigate.
+4. Once the page title or heading clearly refers to “College of Arts and Sciences,” respond with **"Success"**.
+5. If you cannot find it after reasonable attempts, respond with **"Failure"**.
+6. Do not ask questions or expect user input — act autonomously using the tools.
 
-This is not an interactive session, so do not try to ask me questions or expect responses.
-Don't forget that you can navigate the website using the tools I provide.
+Return only:
+- Tool calls (if actions needed), or
+- "Success"/"Failure" (as plain text).
 """
 
 
