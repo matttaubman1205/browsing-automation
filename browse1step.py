@@ -18,7 +18,7 @@ I am providing you with a link to a website.
 Using the tools available, open a browswer on the start URL.
 (You will need to click on things to leave the first page!)
 
-YOUR FIRST STEP: Get to the college of arts and sciences page.
+YOUR FIRST STEP: Click on College of Arts and Sciences and get to the college of arts and sciences page.
 
 At the end, return "Success" if you made it to the desired page, "Failure" if not.
 
