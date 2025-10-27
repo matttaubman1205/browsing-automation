@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 #!/usr/bin/env python3
 """
 compare_runs.py — Compare signals from multiple runs of your Playwright+LLM browser agent.
