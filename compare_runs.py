@@ -38,7 +38,6 @@ Notes:
 """
 from __future__ import annotations
 
-
 import argparse
 import csv
 import os
@@ -46,28 +45,26 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
-
+from typing import Dict, List, Optional
 
 # Optional deps for image comparison
 try:
-from PIL import Image, ImageChops
-PIL_OK = True
-except Exception: # pragma: no cover
-PIL_OK = False
-try:
-import imagehash # type: ignore
-IMAGEHASH_OK = True
-except Exception: # pragma: no cover
-IMAGEHASH_OK = False
-
-
-# Optional deps for nicer tables
-try:
-import pandas as pd # type: ignore
-PD_OK = True
+    from PIL import Image, ImageChops
+    PIL_OK = True
 except Exception:
-PD_OK = False
+    PIL_OK = False
+
+try:
+    import imagehash  # type: ignore
+    IMAGEHASH_OK = True
+except Exception:
+    IMAGEHASH_OK = False
+
+try:
+    import pandas as pd  # type: ignore
+    PD_OK = True
+except Exception:
+    PD_OK = False
 
 
 # ------------------------------ Utilities ------------------------------
