@@ -9,6 +9,7 @@ import llm
 from playwright.async_api import async_playwright, Page
 from sclog import getLogger
 import tiktoken
+from typing import List, Tuple
 
 logger = getLogger(__name__)
 
@@ -43,7 +44,7 @@ total_output_tokens = 0
 class PlaywrightTools:
     def __init__(self, page: Page):
         self.page = page
-        self.history: list[tuple[str, str]] = []
+        self.history: List[Tuple[str, str]] = []
         self.screenshot_index = 0
 
         # Initialize CSV logging
@@ -92,7 +93,7 @@ class PlaywrightTools:
         return await self._get_html()
 
 # %%
-def should_continue(skip_count: int) -> tuple[bool, int]:
+def should_continue(skip_count: int) -> Tuple[bool, int]:
     if skip_count > 0:
         return True, skip_count - 1
     try:
@@ -127,8 +128,6 @@ async def main():
     model = llm.get_async_model(MODEL)
 
     tools = PlaywrightTools(page)
-
-    # Pass tools object directly (llm 0.16 auto-detects async methods)
     conversation = model.conversation(tools=[tools])
 
     # Initial prompt
