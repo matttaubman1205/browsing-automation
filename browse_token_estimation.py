@@ -8,7 +8,7 @@ import time
 import llm
 from playwright.async_api import async_playwright, Page
 from sclog import getLogger
-import tiktoken  # <-- Added for token counting
+import tiktoken  # Added for token counting
 
 logger = getLogger(__name__)
 
@@ -140,10 +140,8 @@ conversation = model.conversation(tools=[tools])
 
 # Initial query
 html_prompt = await tools._get_html()
-full_prompt = SYSTEM_PROMPT + "\n" + html_prompt
-
 # Count input tokens
-num_input_tokens = len(enc.encode(full_prompt))
+num_input_tokens = len(enc.encode(SYSTEM_PROMPT + "\n" + html_prompt))
 total_input_tokens += num_input_tokens
 print(f"[Token count] Initial prompt input tokens: {num_input_tokens}")
 
@@ -175,20 +173,20 @@ while True:
     if not do_continue:
         break
 
-    # Build prompt for next iteration
-    next_prompt_text = ""  # Replace if you pass new HTML/tool results here
-    full_prompt = SYSTEM_PROMPT + "\n" + next_prompt_text + "\n" + str(tool_results)
-    num_input_tokens = len(enc.encode(full_prompt))
-    total_input_tokens += num_input_tokens
-    print(f"[Token count] Loop iteration input tokens: {num_input_tokens}")
-
     response = conversation.prompt(
         system=SYSTEM_PROMPT,
         tool_results=tool_results,
         tools=[tools],
     )
 
+    # Count input tokens for loop iteration
+    loop_input_text = str(tool_results)
+    num_input_tokens = len(enc.encode(SYSTEM_PROMPT + "\n" + loop_input_text))
+    total_input_tokens += num_input_tokens
+    print(f"[Token count] Loop iteration input tokens: {num_input_tokens}")
+
     response_text = await response.text()
+    # Count output tokens for loop iteration
     num_output_tokens = len(enc.encode(response_text))
     total_output_tokens += num_output_tokens
     print(f"[Token count] Loop iteration output tokens: {num_output_tokens}")
@@ -206,6 +204,7 @@ for action, value in tools.history:
     print(f"- {action}: {value}")
 
 await tools._take_screenshot("final")
+
 print(f"\n[Token count] Total input tokens: {total_input_tokens}")
 print(f"[Token count] Total output tokens: {total_output_tokens}")
 
