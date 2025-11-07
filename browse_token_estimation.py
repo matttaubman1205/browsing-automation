@@ -26,7 +26,7 @@ Using the tools available, navigate the website.
 (You will need to click on things to leave the first page!)
 
 YOUR GOAL:
-Go to the Studio Art department. Go to the Studio Art people page. Find the Studio Art professor with the shortest last name. Enter their profile. Tell me where they earned their Bachelor’s Degree.
+Go to the Studio Art department. Go to the Studio Art people page. Find the Studio Art professor with the shortest last name. Enter their profile. Tell me where they earned their Bachelor's Degree.
 
 This is not an interactive session, so do not ask questions or expect responses.
 You can navigate the site by clicking links and returning HTML after each navigation.
