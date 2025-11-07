@@ -6,7 +6,6 @@ import os
 import csv
 import time
 import llm
-from llm import Tool
 from playwright.async_api import async_playwright, Page
 from sclog import getLogger
 import tiktoken
@@ -129,14 +128,8 @@ async def main():
 
     tools = PlaywrightTools(page)
 
-    # Wrap tool methods in llm.Tool objects
-    tools_list = [
-        Tool("click", tools.click, description="Click on a selector"),
-        Tool("go_back", tools.go_back, description="Go back a page"),
-        Tool("get_html", tools.get_html, description="Get page HTML")
-    ]
-
-    conversation = model.conversation(tools=tools_list)
+    # Pass tools object directly (llm 0.16 auto-detects async methods)
+    conversation = model.conversation(tools=[tools])
 
     # Initial prompt
     html_prompt = await tools._get_html()
@@ -147,7 +140,6 @@ async def main():
     response = await conversation.prompt(
         prompt=html_prompt,
         system=SYSTEM_PROMPT,
-        tools=tools_list
     )
     response_text = await response.text()
     num_output_tokens = len(enc.encode(response_text))
@@ -171,7 +163,6 @@ async def main():
         response = conversation.prompt(
             system=SYSTEM_PROMPT,
             tool_results=tool_results,
-            tools=tools_list
         )
 
         loop_input_text = str(tool_results)
