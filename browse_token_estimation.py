@@ -6,9 +6,10 @@ import os
 import csv
 import time
 import llm
+from llm import Tool
 from playwright.async_api import async_playwright, Page
 from sclog import getLogger
-import tiktoken  # Added for token counting
+import tiktoken
 
 logger = getLogger(__name__)
 
@@ -26,7 +27,7 @@ Using the tools available, navigate the website.
 (You will need to click on things to leave the first page!)
 
 YOUR GOAL:
-Go to the Studio Art department. Go to the Studio Art people page. Find the Studio Art professor with the shortest last name. Enter their profile. Tell me where they earned their Bachelor's Degree.
+Go to the Studio Art department. Go to the Studio Art people page. Find the Studio Art professor with the shortest last name. Enter their profile. Tell me where they earned their Bachelor’s Degree.
 
 This is not an interactive session, so do not ask questions or expect responses.
 You can navigate the site by clicking links and returning HTML after each navigation.
@@ -39,10 +40,9 @@ total_input_tokens = 0
 total_output_tokens = 0
 
 # %%
-# Define tools for the LLM to use
-class PlaywrightTools(llm.Toolbox):
+# Define tools class
+class PlaywrightTools:
     def __init__(self, page: Page):
-        super().__init__()
         self.page = page
         self.history: list[tuple[str, str]] = []
         self.screenshot_index = 0
@@ -54,11 +54,9 @@ class PlaywrightTools(llm.Toolbox):
             writer.writerow(["timestamp", "step", "action", "description", "url"])
 
     async def _get_html(self) -> str:
-        """Return the HTML of the current page."""
         return await self.page.locator("body").inner_html()
 
     async def _take_screenshot(self, label: str):
-        """Save a screenshot with timestamp and step index."""
         self.screenshot_index += 1
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         filename = f"screenshots/{self.screenshot_index:03d}-{label}-{timestamp}.png"
@@ -66,7 +64,6 @@ class PlaywrightTools(llm.Toolbox):
         logger.info(f"📸 Screenshot saved: {filename}")
 
     async def _log_step(self, action: str, description: str = ""):
-        """Append current URL and action info to the CSV log."""
         url = self.page.url
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         with open(self.csv_path, mode="a", newline="", encoding="utf-8") as f:
@@ -95,10 +92,8 @@ class PlaywrightTools(llm.Toolbox):
         await self._log_step("get_html")
         return await self._get_html()
 
-
 # %%
 def should_continue(skip_count: int) -> tuple[bool, int]:
-    """Prompt whether to continue executing LLM tool calls."""
     if skip_count > 0:
         return True, skip_count - 1
     try:
@@ -111,104 +106,101 @@ def should_continue(skip_count: int) -> tuple[bool, int]:
         return False, 0
     return True, 0
 
-
-###############################################################################
-# Main logic
 # %%
-playwright = async_playwright()
-p = await playwright.__aenter__()
-browser = await p.chromium.launch(channel="chrome", headless=False)
-context = await browser.new_context(viewport={"width": 1440, "height": 1700})
-page = await context.new_page()
-page.set_default_timeout(8000)
+async def main():
+    global total_input_tokens, total_output_tokens
 
-await page.goto(START_URL)
-await page.screenshot(path="screenshots/000-start.png", full_page=True)
+    playwright = await async_playwright().__aenter__()
+    browser = await playwright.chromium.launch(channel="chrome", headless=False)
+    context = await browser.new_context(viewport={"width": 1440, "height": 1700})
+    page = await context.new_page()
+    page.set_default_timeout(8000)
 
-# Log the starting page URL
-with open("page_log.csv", mode="a", newline="", encoding="utf-8") as f:
-    writer = csv.writer(f)
-    writer.writerow([time.strftime("%Y-%m-%d %H:%M:%S"), 0, "start", "initial load", page.url])
+    await page.goto(START_URL)
+    await page.screenshot(path="screenshots/000-start.png", full_page=True)
 
-# %%
-# Set up LLM
-MODEL = "gemini-2.5-flash"  # or "gpt-4.1-turbo" if available
-model = llm.get_async_model(MODEL)
+    with open("page_log.csv", mode="a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow([time.strftime("%Y-%m-%d %H:%M:%S"), 0, "start", "initial load", page.url])
 
-tools = PlaywrightTools(page)
-conversation = model.conversation(tools=[tools])
+    # Set up LLM
+    MODEL = "gemini-2.5-flash"  # or "gpt-4.1-turbo" if available
+    model = llm.get_async_model(MODEL)
 
-# Initial query
-html_prompt = await tools._get_html()
-# Count input tokens
-num_input_tokens = len(enc.encode(SYSTEM_PROMPT + "\n" + html_prompt))
-total_input_tokens += num_input_tokens
-print(f"[Token count] Initial prompt input tokens: {num_input_tokens}")
+    tools = PlaywrightTools(page)
 
-response = await conversation.prompt(
-    prompt=html_prompt,
-    system=SYSTEM_PROMPT,
-    tools=[tools],
-)
-logger.debug("Making initial query to LLM")
-response_text = await response.text()
+    # Wrap tool methods in llm.Tool objects
+    tools_list = [
+        Tool("click", tools.click, description="Click on a selector"),
+        Tool("go_back", tools.go_back, description="Go back a page"),
+        Tool("get_html", tools.get_html, description="Get page HTML")
+    ]
 
-# Count output tokens
-num_output_tokens = len(enc.encode(response_text))
-total_output_tokens += num_output_tokens
-print(f"[Token count] Initial prompt output tokens: {num_output_tokens}")
+    conversation = model.conversation(tools=tools_list)
 
-# %%
-# Agentic loop
-skip_confirmation_for = 0
-while True:
-    tool_calls = await response.tool_calls()
-    if not tool_calls:
-        break
-
-    tool_results = await response.execute_tool_calls()
-    await tools._take_screenshot("step")  # Screenshot after each action
-
-    do_continue, skip_confirmation_for = should_continue(skip_confirmation_for)
-    if not do_continue:
-        break
-
-    response = conversation.prompt(
-        system=SYSTEM_PROMPT,
-        tool_results=tool_results,
-        tools=[tools],
-    )
-
-    # Count input tokens for loop iteration
-    loop_input_text = str(tool_results)
-    num_input_tokens = len(enc.encode(SYSTEM_PROMPT + "\n" + loop_input_text))
+    # Initial prompt
+    html_prompt = await tools._get_html()
+    num_input_tokens = len(enc.encode(SYSTEM_PROMPT + "\n" + html_prompt))
     total_input_tokens += num_input_tokens
-    print(f"[Token count] Loop iteration input tokens: {num_input_tokens}")
+    print(f"[Token count] Initial prompt input tokens: {num_input_tokens}")
 
+    response = await conversation.prompt(
+        prompt=html_prompt,
+        system=SYSTEM_PROMPT,
+        tools=tools_list
+    )
     response_text = await response.text()
-    # Count output tokens for loop iteration
     num_output_tokens = len(enc.encode(response_text))
     total_output_tokens += num_output_tokens
-    print(f"[Token count] Loop iteration output tokens: {num_output_tokens}")
+    print(f"[Token count] Initial prompt output tokens: {num_output_tokens}")
 
-# Final output
-final_text = await response.text()
-print(f"Final response:\n{final_text}\n")
+    # Agentic loop
+    skip_confirmation_for = 0
+    while True:
+        tool_calls = await response.tool_calls()
+        if not tool_calls:
+            break
 
-num_output_tokens = len(enc.encode(final_text))
-total_output_tokens += num_output_tokens
-print(f"[Token count] Final output tokens: {num_output_tokens}")
+        tool_results = await response.execute_tool_calls()
+        await tools._take_screenshot("step")
 
-print("\nSteps taken:")
-for action, value in tools.history:
-    print(f"- {action}: {value}")
+        do_continue, skip_confirmation_for = should_continue(skip_confirmation_for)
+        if not do_continue:
+            break
 
-await tools._take_screenshot("final")
+        response = conversation.prompt(
+            system=SYSTEM_PROMPT,
+            tool_results=tool_results,
+            tools=tools_list
+        )
 
-print(f"\n[Token count] Total input tokens: {total_input_tokens}")
-print(f"[Token count] Total output tokens: {total_output_tokens}")
+        loop_input_text = str(tool_results)
+        num_input_tokens = len(enc.encode(SYSTEM_PROMPT + "\n" + loop_input_text))
+        total_input_tokens += num_input_tokens
+        print(f"[Token count] Loop iteration input tokens: {num_input_tokens}")
 
-await page.close()
-await context.close()
-await browser.close()
-await playwright.__aexit__()
+        response_text = await response.text()
+        num_output_tokens = len(enc.encode(response_text))
+        total_output_tokens += num_output_tokens
+        print(f"[Token count] Loop iteration output tokens: {num_output_tokens}")
+
+    # Final output
+    final_text = await response.text()
+    print(f"Final response:\n{final_text}\n")
+    num_output_tokens = len(enc.encode(final_text))
+    total_output_tokens += num_output_tokens
+    print(f"[Token count] Final output tokens: {num_output_tokens}")
+
+    print("\nSteps taken:")
+    for action, value in tools.history:
+        print(f"- {action}: {value}")
+
+    await tools._take_screenshot("final")
+
+    print(f"\n[Token count] Total input tokens: {total_input_tokens}")
+    print(f"[Token count] Total output tokens: {total_output_tokens}")
+
+    await page.close()
+    await context.close()
+    await browser.close()
+    await playwright.__aexit__()
