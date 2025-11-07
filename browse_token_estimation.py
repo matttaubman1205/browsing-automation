@@ -194,3 +194,8 @@ async def main():
     await context.close()
     await browser.close()
     await playwright.__aexit__()
+
+    # %%
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
